@@ -21,6 +21,12 @@
     <None Include="vert.vs">
       <Filter>Resource Files</Filter>
     </None>
+    <None Include="Sfrag.fs">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Svert.vs">
+      <Filter>Resource Files</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Shaders.cpp">
@@ -38,6 +44,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="tiny_obj_loader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="viewer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

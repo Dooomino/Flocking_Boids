@@ -20,6 +20,8 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="frag.fs" />
+    <None Include="Sfrag.fs" />
+    <None Include="Svert.vs" />
     <None Include="vert.vs" />
   </ItemGroup>
   <ItemGroup>
@@ -30,6 +32,7 @@
   <ItemGroup>
     <ClInclude Include="Shaders.h" />
     <ClInclude Include="tiny_obj_loader.h" />
+    <ClInclude Include="viewer.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>

@@ -14,31 +14,40 @@
 #include <iostream>
 #include <ctime>
 #include <vector>
-
-#define SPHERE
+#include "viewer.h"
 
 float eyex, eyey, eyez;	// current user position
-float scalef=0.2f;
+float scalef=0.1f;
 float modelScale = 10.0f;
 double theta, phi;		// user's position  on a sphere centered on the object
 double r;				// radius of the sphere
 float rot = 0;
 
 GLuint program;
+GLuint sunprogram;
 
 glm::mat4 projection;	// projection matrix
 
+//Boids
 GLuint objVAO;			// vertex object identifier
 int triangles;			// number of triangles
 GLuint ibuffer;			// index buffer identifier
 
-int numBoids = 1000;
+//sphere
+GLuint sphereVAO;		// vertex object identifier
+int striangles;			// number of triangles
+GLuint sibuffer;		// index buffer identifier
+
+
+int numBoids = 100;
+int centerSize = 4;
 
 std::vector<glm::vec3> listBoid;
 std::vector<glm::vec3> rotationAxis;
 
 float normalizedRandom() {
-	return 1.0f / (rand()%10);
+	int a = rand();
+	return 1.0f / ((a % 10)+1);
 }
 
 int randomNeg() {
@@ -46,22 +55,22 @@ int randomNeg() {
 	return a == 0 ? -1 : 1;
 }
 
-
 void initBoidsPos() {
 	listBoid.clear();
 	for (int i = 0; i < numBoids; i++) {
-		float dx = normalizedRandom()*randomNeg();
-		float dy = normalizedRandom()*randomNeg();
-		float dz = normalizedRandom()*randomNeg();
+		float dx = centerSize * normalizedRandom() * randomNeg();
+		float dy = centerSize * normalizedRandom() * randomNeg();
+		float dz = centerSize * normalizedRandom() * randomNeg();
 
 		float rx = normalizedRandom() * randomNeg();
 		float ry = normalizedRandom() * randomNeg();
 		float rz = normalizedRandom() * randomNeg();
 
+		//glm::vec3 pos(dx, dy, dz);
 		glm::vec3 pos(dx, dy, dz);
 		glm::vec3 rotate(rx, ry, rz);
-
-		printf("%f %f %f\n", pos.x, pos.y, pos.z);
+		if(numBoids<100)
+			printf("%f %f %f\n", pos.x, pos.y, pos.z);
 
 		listBoid.push_back(pos);
 		rotationAxis.push_back(rotate);
@@ -69,9 +78,89 @@ void initBoidsPos() {
 
 }
 
+void initSphere() {
+	GLuint vbuffer;
+	GLint vPosition;
+	GLint vNormal;
+	GLfloat* vertices;
+	GLfloat* normals;
+	GLuint* indices;
+	std::vector<tinyobj::shape_t> shapes;
+	std::vector<tinyobj::material_t> materials;
+	int nv;
+	int nn;
+	int ni;
+	int i;
 
+	glGenVertexArrays(1, &sphereVAO);
+	glBindVertexArray(sphereVAO);
 
-void init() {
+	/*  Load the obj file */
+
+	std::string err = tinyobj::LoadObj(shapes, materials, "sphere.obj", 0);
+
+	if (!err.empty()) {
+		std::cerr << err << std::endl;
+		return;
+	}
+
+	/*  Retrieve the vertex coordinate data */
+
+	nv = (int)shapes[0].mesh.positions.size();
+	vertices = new GLfloat[nv];
+	for (i = 0; i < nv; i++) {
+		vertices[i] = shapes[0].mesh.positions[i] / 2.0f;
+	}
+
+	/*  Retrieve the vertex normals */
+
+	nn = (int)shapes[0].mesh.normals.size();
+	normals = new GLfloat[nn];
+	for (i = 0; i < nn; i++) {
+		normals[i] = shapes[0].mesh.normals[i];
+	}
+
+	/*  Retrieve the triangle indices */
+
+	ni = (int)shapes[0].mesh.indices.size();
+	striangles = ni / 3;
+	indices = new GLuint[ni];
+	for (i = 0; i < ni; i++) {
+		indices[i] = shapes[0].mesh.indices[i];
+	}
+
+	/*
+	*  load the vertex coordinate data
+	*/
+	glGenBuffers(1, &vbuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, vbuffer);
+	glBufferData(GL_ARRAY_BUFFER, (nv + nn) * sizeof(GLfloat), NULL, GL_STATIC_DRAW);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, nv * sizeof(GLfloat), vertices);
+	glBufferSubData(GL_ARRAY_BUFFER, nv * sizeof(GLfloat), nn * sizeof(GLfloat), normals);
+
+	/*
+	*  load the vertex indexes
+	*/
+	glGenBuffers(1, &sibuffer);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sibuffer);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, ni * sizeof(GLuint), indices, GL_STATIC_DRAW);
+
+	/*
+	*  link the vertex coordinates to the vPosition
+	*  variable in the vertex program.  Do the same
+	*  for the normal vectors.
+	*/
+	glUseProgram(sunprogram);
+	vPosition = glGetAttribLocation(sunprogram, "vPosition");
+	glVertexAttribPointer(vPosition, 3, GL_FLOAT, GL_FALSE, 0, 0);
+	glEnableVertexAttribArray(vPosition);
+	vNormal = glGetAttribLocation(sunprogram, "vNormal");
+	glVertexAttribPointer(vNormal, 3, GL_FLOAT, GL_FALSE, 0, (void*)((nv/2) * sizeof(vertices)));
+	glEnableVertexAttribArray(vNormal);
+
+}
+
+void initBoids() {
 	GLuint vbuffer;
 	GLint vPosition;
 	GLint vNormal;
@@ -263,17 +352,30 @@ void display(void) {
 	glm::vec3 eyepos(eyex, eyey, eyez);
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glUseProgram(program);
+	glUseProgram(sunprogram);
 
 	view = glm::lookAt(glm::vec3(eyex, eyey, eyez),
 		glm::vec3(0.0f, 0.0f, 0.0f),
 		glm::vec3(0.0f, 0.0f, 1.0f));
 
+	viewLoc = glGetUniformLocation(sunprogram, "modelView");
+	projLoc = glGetUniformLocation(sunprogram, "projection");
+	eyeLoc = glGetUniformLocation(sunprogram, "Eye");
+
+	view = glm::scale(view, glm::vec3(scalef * centerSize));
+	glUniformMatrix4fv(viewLoc, 1, 0, glm::value_ptr(view));
+	glUniformMatrix4fv(projLoc, 1, 0, glm::value_ptr(projection));
+	glUniform3fv(eyeLoc, 1, glm::value_ptr(eyepos));
+
+	glBindVertexArray(sphereVAO);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sibuffer);
+	glDrawElements(GL_TRIANGLES, 3 * striangles, GL_UNSIGNED_INT, NULL);
+
+	glUseProgram(program);
+
 	viewLoc = glGetUniformLocation(program, "modelView");
 	projLoc = glGetUniformLocation(program, "projection");
 	eyeLoc = glGetUniformLocation(program, "Eye");
-
-
 
 	for (int i = 0; i < numBoids; i++) {
 		glm::mat4 scale(1.0f);
@@ -371,7 +473,15 @@ int main(int argc, char **argv) {
 	fs = buildShader(GL_FRAGMENT_SHADER, (char*)"frag.fs");
 	program = buildProgram(vs, fs, 0);
 	dumpProgram(program, (char*)"shader program");
-	init();
+
+
+	vs = buildShader(GL_VERTEX_SHADER, (char*)"Svert.vs");
+	fs = buildShader(GL_FRAGMENT_SHADER, (char*)"Sfrag.fs");
+	sunprogram = buildProgram(vs, fs, 0);
+	dumpProgram(sunprogram, (char*)"sun program");
+
+	initBoids();
+	initSphere();
 
 	eyex = 0.0;
 	eyez = 0.0;

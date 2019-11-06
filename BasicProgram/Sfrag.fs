@@ -12,16 +12,15 @@ void main() {
 	float ams = 0.2;
 	float sps = 0.6;
 
-	vec4 base = vec4(0.8, 0.8, 0.8, 1.0);
-	vec4 lightColor = vec4(1.0, 0.5, 0.5, 1.0);
-	vec3 lightpos = vec3(0.0, 0.0, 0.0);
+	vec4 base = vec4(1.0, 0.1, 0.0, 1.0);
+	vec4 lightColor = vec4(1.0, 1.0, 1.0, 1.0);
+	vec3 lightpos = vec3(3.0, 3.0, 3.0);
 
 	vec4 amb = ams*lightColor;
 
     vec3 L = normalize(lightpos-position.xyz);
 	float diff = max(dot(N,L),0.0);
 	vec4 diffuse = diff*lightColor;
-	
 
 	vec3 V = normalize(Eye - position.xyz);
 	vec3 H = reflect(-L,N);
