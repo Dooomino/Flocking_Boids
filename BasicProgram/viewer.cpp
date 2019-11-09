@@ -1,4 +1,5 @@
 #define GLM_FORCE_RADIANS
+#define _USE_MATH_DEFINES
 
 #include <GL/glew.h>
 #define GLFW_DLL
@@ -25,7 +26,8 @@ float modelScale = 10.0f;
 double theta, phi;		// user's position  on a sphere centered on the object
 double r;				// radius of the sphere
 float rot = 0;
-float rotspeed = 0.001;
+float rotspeed = 0.05;
+
 
 
 glm::mat4 projection;	// projection matrix
@@ -37,7 +39,9 @@ int triangles;			// number of triangles
 GLuint ibuffer;			// index buffer identifier
 
 //sphere
-GLuint sunprogram;
+GLuint saturn_program;
+Texture* saturnTex;		// texture
+GLuint saturnTbuffer;   // texture buffer
 GLuint sphereVAO;		// vertex object identifier
 int striangles;			// number of triangles
 GLuint sibuffer;		// index buffer identifier
@@ -50,23 +54,25 @@ GLuint skyVAO;		// vertex object identifier
 int skytriangles;			// number of triangles
 GLuint skyibuffer;		// index buffer identifier
 
-int numBoids = 1000;
-int centerSize = 4;
+int numBoids = 2500;
+int boidsSize = 1;
+int centerSize = 10;
+int saturnSize = 3; 
+int flockSize = 3;
+float scater = 1;
 
 int width = 512, height = 512;
 
 std::vector<glm::vec3> listBoid;
-std::vector<glm::vec3> rotationAxis;
 std::vector<GLfloat> rotationOffset;
-
-float normalizedRandom() {
-	int a = rand();
-	return 1.0f / ((a % 10)+1);
-}
 
 float sizedRandom(int size) {
 	int a = rand()%(size+1);
 	return  a*1.0f;
+}
+
+float normalizedRandom() {	
+	return (double) rand() / (RAND_MAX);
 }
 
 int randomNeg() {
@@ -87,20 +93,15 @@ void initBoidsPos() {
 		//glm::vec3 pos(dx, dy, dz);
 		//glm::vec3 rotate(rx, ry, rz);
 
-		float dx = centerSize * normalizedRandom() * randomNeg();
-		float rx = is0or1();
-		float ry = is0or1();
-		float rz = is0or1();
+		double dx = abs(centerSize - saturnSize)/4.0f + flockSize * normalizedRandom();
 
-		glm::vec3 pos(dx,dx,dx);
-		glm::vec3 rotate(rx,0.0f, rz);
+		glm::vec3 pos(dx,0.0,0.0);
 		
-		if(numBoids<100)
+		if(numBoids<200)
 			printf("%f %f %f\n", pos.x, pos.y, pos.z);
 
 		rotationOffset.push_back(sizedRandom(360));
 		listBoid.push_back(pos);
-		rotationAxis.push_back(rotate);
 	}
 
 }
@@ -180,22 +181,37 @@ void createCubemap(const char* url, GLuint& Buffer) {
 	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+}
 
+void createTexture(const char* url, Texture* tex, GLuint buffer) {
+	tex = loadTexture(url);
+	glGenTextures(1, &buffer);
+	glBindTexture(GL_TEXTURE_2D, buffer);
 
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tex->width, tex->height, 0, GL_RGB, GL_UNSIGNED_BYTE, tex->data);
+	glGenerateMipmap(GL_TEXTURE_2D);
 }
 
 void initSphere() {
 	GLuint vbuffer;
+	GLuint vTex;
 	GLint vPosition;
 	GLint vNormal;
 	GLfloat* vertices;
 	GLfloat* normals;
+	GLfloat* texcoords;
 	GLuint* indices;
 	std::vector<tinyobj::shape_t> shapes;
 	std::vector<tinyobj::material_t> materials;
 	int nv;
 	int nn;
 	int ni;
+	int nt;
 	int i;
 
 	glGenVertexArrays(1, &sphereVAO);
@@ -225,7 +241,22 @@ void initSphere() {
 	for (i = 0; i < nn; i++) {
 		normals[i] = shapes[0].mesh.normals[i];
 	}
+	/*  calc the texture coords */
+	double verts = nv / 3;
+	nt = 2 * verts;
+	texcoords = new GLfloat[nt];
+	for (i = 0; i < verts; i++) {
+		GLfloat x = vertices[3 * i];
+		GLfloat y = vertices[3 * i + 1];
+		GLfloat z = vertices[3 * i + 2];
+		theta = atan2(x, z);
+		phi = atan2(y, sqrt(x * x + z * z));
 
+		//tex[2 * i] = (theta+M_PI) / (2 * M_PI);
+		texcoords[2 * i] = fabs(theta) / M_PI;
+
+		texcoords[2 * i + 1] = phi / M_PI;
+	}
 	/*  Retrieve the triangle indices */
 
 	ni = (int)shapes[0].mesh.indices.size();
@@ -240,9 +271,11 @@ void initSphere() {
 	*/
 	glGenBuffers(1, &vbuffer);
 	glBindBuffer(GL_ARRAY_BUFFER, vbuffer);
-	glBufferData(GL_ARRAY_BUFFER, (nv + nn) * sizeof(GLfloat), NULL, GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, (nv + nn + nt) * sizeof(GLfloat), NULL, GL_STATIC_DRAW);
 	glBufferSubData(GL_ARRAY_BUFFER, 0, nv * sizeof(GLfloat), vertices);
 	glBufferSubData(GL_ARRAY_BUFFER, nv * sizeof(GLfloat), nn * sizeof(GLfloat), normals);
+	glBufferSubData(GL_ARRAY_BUFFER, (nv + nn) * sizeof(GLfloat), nt * sizeof(GLfloat), texcoords);
+
 
 	/*
 	*  load the vertex indexes
@@ -256,11 +289,14 @@ void initSphere() {
 	*  variable in the vertex program.  Do the same
 	*  for the normal vectors.
 	*/
-	glUseProgram(sunprogram);
-	vPosition = glGetAttribLocation(sunprogram, "vPosition");
+	glUseProgram(saturn_program);
+	vTex = glGetAttribLocation(saturn_program, "vTexcoords");
+	glVertexAttribPointer(vTex, 2, GL_FLOAT, GL_FALSE, 0, (void*)((nv + nn) * sizeof(GLfloat)));
+	glEnableVertexAttribArray(vTex);
+	vPosition = glGetAttribLocation(saturn_program, "vPosition");
 	glVertexAttribPointer(vPosition, 3, GL_FLOAT, GL_FALSE, 0, 0);
 	glEnableVertexAttribArray(vPosition);
-	vNormal = glGetAttribLocation(sunprogram, "vNormal");
+	vNormal = glGetAttribLocation(saturn_program, "vNormal");
 	glVertexAttribPointer(vNormal, 3, GL_FLOAT, GL_FALSE, 0, (void*)((nv/2) * sizeof(vertices)));
 	glEnableVertexAttribArray(vNormal);
 
@@ -395,20 +431,29 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
 
 
 static void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
-	if (button == GLFW_MOUSE_BUTTON_LEFT && (action == GLFW_REPEAT)) {
-		if (lastX <= mouseX) {
-			phi -= speed;
+	if (button == GLFW_MOUSE_BUTTON_LEFT && (action == GLFW_REPEAT || action == GLFW_PRESS)) {
+		/*mouseX = xpos;
+		mouseY = ypos;*/
+
+		float distX = abs(lastX - mouseX);
+		float distY = abs(lastY - mouseY);
+
+		if (lastX < mouseX) {
+			phi -= speed * distX;
 		}
 		else {
-			phi += speed;
+			phi += speed * distX;
 		}
 
-		if (lastY <= mouseY) {
-			theta -= speed;
+		if (lastY < mouseY) {
+			theta += speed * distY;
 		}
 		else {
-			theta += speed;
+			theta -= speed * distY;
 		}
+
+		lastX = mouseX;
+		lastY = mouseY;
 	}
 
 
@@ -434,13 +479,13 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
 		}else if (action == GLFW_PRESS){
 			if (key == GLFW_KEY_R)
 				initBoidsPos();
-			if (key == GLFW_KEY_T)
-				createCubemap("D:\\Desktop\\Flocking_Boids\\BasicProgram\\Cubemap", SkyTextureBuffer);
+			if (key == GLFW_KEY_S)
+				scater += 10;
 			if (key == GLFW_KEY_EQUAL){
-				rotspeed += 0.001;
+				rotspeed += 0.01;
 				printf("set rotaion speed %f\n",rotspeed);
 			}else if (key == GLFW_KEY_MINUS){
-				rotspeed -= 0.001;
+				rotspeed -= 0.01;
 				printf("set rotaion speed %f\n",rotspeed);
 			}		
 		}
@@ -471,6 +516,7 @@ void display(void) {
 	glm::mat4 view;
 	int viewLoc;
 	int projLoc;
+	int texLoc;
 	int eyeLoc;
 	//pre-defines
 	eyex = (float)(r * sin(theta) * cos(phi));
@@ -511,30 +557,38 @@ void display(void) {
 
 	glBindVertexArray(skyVAO);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, skyibuffer);
-	//glDrawElements(GL_TRIANGLES, 3 * skytriangles, GL_UNSIGNED_INT, NULL);
+	glDrawElements(GL_TRIANGLES, 3 * skytriangles, GL_UNSIGNED_INT, NULL);
 
 	glDepthMask(GL_TRUE);
 	glEnable(GL_DEPTH_TEST);
 
-	//sun 
-	glUseProgram(sunprogram);
+	//saturn
+	glUseProgram(saturn_program);
 	view = glm::lookAt(eyepos,
 		glm::vec3(0.0f, 0.0f, 0.0f),
 		glm::vec3(0.0f, 0.0f, 1.0f));
 
-	viewLoc = glGetUniformLocation(sunprogram, "modelView");
-	projLoc = glGetUniformLocation(sunprogram, "projection");
-	eyeLoc = glGetUniformLocation(sunprogram, "Eye");
+	glm::mat4 rotateSat = glm::rotate(glm::mat4(1.0f),80.0f, glm::vec3(1.0f, 0.0, 0.0));
 
-	view = glm::scale(view, glm::vec3(glm::max(scalef * centerSize,0.0f)));
-	glUniformMatrix4fv(viewLoc, 1, 0, glm::value_ptr(view));
+	viewLoc = glGetUniformLocation(saturn_program, "modelView");
+	projLoc = glGetUniformLocation(saturn_program, "projection");
+	eyeLoc = glGetUniformLocation(saturn_program, "Eye");
+	view = glm::scale(view, glm::vec3(glm::max(scalef * saturnSize * centerSize,0.0f)));
+
+	glUniformMatrix4fv(viewLoc, 1, 0, glm::value_ptr(view*rotateSat));
 	glUniformMatrix4fv(projLoc, 1, 0, glm::value_ptr(projection));
 	glUniform3fv(eyeLoc, 1, glm::value_ptr(eyepos));
+
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, saturnTbuffer);
+	texLoc = glGetUniformLocation(saturn_program, "Tex");
+	glUniform1i(texLoc, 0);
+
 
 	glBindVertexArray(sphereVAO);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sibuffer);
 	glDrawElements(GL_TRIANGLES, 3 * striangles, GL_UNSIGNED_INT, NULL);
-	
+
 	//Boids
 	glUseProgram(program);
 
@@ -550,14 +604,14 @@ void display(void) {
 			glm::vec3(0.0f, 0.0f, 0.0f),
 			glm::vec3(0.0f, 0.0f, 1.0f));
 
-		scale = glm::scale(scale, glm::vec3(glm::max(scalef,0.0f)));
+		scale = glm::scale(scale, glm::vec3(glm::max(boidsSize * scalef, 0.0f)));
 
 		view *= scale;
 
-		transform = glm::rotate(transform, rot * rotationOffset[i], rotationAxis[i]);
-		transform = glm::translate(transform, modelScale * listBoid[i]);
+		transform = glm::rotate(transform, rot + rotationOffset[i], glm::vec3(0,0,1.0f));
+		transform = glm::translate(transform, scater * modelScale * listBoid[i]);
 		//transform = glm::translate(transform, modelScale * glm::vec3(0.0,1.0,0.0));
-		transform = glm::rotate(transform,90.0f, glm::vec3(0.0,0.0,-1.0));
+		transform = glm::rotate(transform,90.0f, glm::vec3(1.0,1.0,0.0));
 
 		view *= transform;
 
@@ -576,6 +630,10 @@ void display(void) {
 	rot += rotspeed;
 	if (rot > 360.0f) {
 		rot = 0;
+	}
+	scater -= 0.1;
+	if (scater < 1) {
+		scater = 1;
 	}
 }
 
@@ -644,8 +702,8 @@ int main(int argc, char **argv) {
 
 	vs = buildShader(GL_VERTEX_SHADER, (char*)"Svert.vs");
 	fs = buildShader(GL_FRAGMENT_SHADER, (char*)"Sfrag.fs");
-	sunprogram = buildProgram(vs, fs, 0);
-	dumpProgram(sunprogram, (char*)"sun program");
+	saturn_program = buildProgram(vs, fs, 0);
+	dumpProgram(saturn_program, (char*)"sun program");
 
 	vs = buildShader(GL_VERTEX_SHADER, (char*)"skyv.vs");
 	fs = buildShader(GL_FRAGMENT_SHADER, (char*)"skyf.fs");
@@ -671,7 +729,8 @@ int main(int argc, char **argv) {
 	initBoidsPos();
 
 	//create texture
-	createCubemap("D:\\Desktop\\Flocking_Boids\\BasicProgram\\Cubemap",SkyTextureBuffer);
+	createCubemap("D:\\Desktop\\Flocking_Boids\\BasicProgram\\Cubemap\\galaxy",SkyTextureBuffer);
+	createTexture("D:\\Desktop\\Flocking_Boids\\BasicProgram\\texture\\saturn.jpg",saturnTex,saturnTbuffer);
 
 	// GLFW main loop, display model, swapbuffer and check for input
 

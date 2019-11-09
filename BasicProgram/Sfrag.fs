@@ -2,8 +2,10 @@
 
 in vec3 normal;
 in vec4 position;
+in vec2 texcoords;
 
 uniform vec3 Eye;
+uniform sampler2D Tex;
 
 
 void main() {
@@ -28,8 +30,11 @@ void main() {
 	vec4 specular = sps*spec*lightColor;
 
 	// diffuse = dot(N,L);
+	vec4 tex = texture(Tex,texcoords);
 
-	gl_FragColor = (amb + diffuse)*base + specular;
+	gl_FragColor = (tex + diffuse)*base + specular;
+	gl_FragColor = tex;
+
 	gl_FragColor.a = base.a;
 
 }
