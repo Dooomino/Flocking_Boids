@@ -14,7 +14,7 @@ void main() {
 
 	vec4 base = vec4(0.8, 0.8, 0.8, 1.0);
 	vec4 lightColor = vec4(1.0, 0.5, 0.5, 1.0);
-	vec3 lightpos = vec3(0.0, 0.0, 0.0);
+	vec3 lightpos = vec3(10.0, 10.0, 10.0);
 
 	vec4 amb = ams*lightColor;
 

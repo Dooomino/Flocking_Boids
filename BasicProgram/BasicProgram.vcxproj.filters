@@ -27,6 +27,12 @@
     <None Include="Svert.vs">
       <Filter>Resource Files</Filter>
     </None>
+    <None Include="skyf.fs">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="skyv.vs">
+      <Filter>Resource Files</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Shaders.cpp">
@@ -38,6 +44,9 @@
     <ClCompile Include="viewer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="texture.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Shaders.h">
@@ -47,6 +56,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="viewer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="texture.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

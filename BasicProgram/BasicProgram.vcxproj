@@ -21,16 +21,20 @@
   <ItemGroup>
     <None Include="frag.fs" />
     <None Include="Sfrag.fs" />
+    <None Include="skyf.fs" />
+    <None Include="skyv.vs" />
     <None Include="Svert.vs" />
     <None Include="vert.vs" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Shaders.cpp" />
+    <ClCompile Include="texture.cpp" />
     <ClCompile Include="tiny_obj_loader.cc" />
     <ClCompile Include="viewer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Shaders.h" />
+    <ClInclude Include="texture.h" />
     <ClInclude Include="tiny_obj_loader.h" />
     <ClInclude Include="viewer.h" />
   </ItemGroup>
@@ -114,7 +118,7 @@
       <PreprocessorDefinitions> _CRT_SECURE_NO_WARNINGS;_MBCS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>$(ProjectDir)lib/glew32s.lib;$(ProjectDir)lib/glew32.lib;$(ProjectDir)lib/glfw3.lib;$(ProjectDir)lib/glfw3dll.lib;opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>$(ProjectDir)lib\glew32s.lib;$(ProjectDir)lib\glew32.lib;$(ProjectDir)lib\glfw3.lib;$(ProjectDir)lib\glfw3dll.lib;$(ProjectDir)lib\FreeImage.lib;$(ProjectDir)lib\FreeImaged.lib;opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">

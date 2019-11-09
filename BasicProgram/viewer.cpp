@@ -15,6 +15,9 @@
 #include <ctime>
 #include <vector>
 #include "viewer.h"
+#include <FreeImage/FreeImage.h>
+#include "texture.h"
+
 
 float eyex, eyey, eyez;	// current user position
 float scalef=0.1f;
@@ -22,32 +25,48 @@ float modelScale = 10.0f;
 double theta, phi;		// user's position  on a sphere centered on the object
 double r;				// radius of the sphere
 float rot = 0;
+float rotspeed = 0.001;
 
-GLuint program;
-GLuint sunprogram;
 
 glm::mat4 projection;	// projection matrix
 
 //Boids
+GLuint program;
 GLuint objVAO;			// vertex object identifier
 int triangles;			// number of triangles
 GLuint ibuffer;			// index buffer identifier
 
 //sphere
+GLuint sunprogram;
 GLuint sphereVAO;		// vertex object identifier
 int striangles;			// number of triangles
 GLuint sibuffer;		// index buffer identifier
 
+//Skybox
+Cube* textureCube; // texture container
+GLuint SkyTextureBuffer;  // sky texture buffer
+GLuint skyprogram;  // shader program
+GLuint skyVAO;		// vertex object identifier
+int skytriangles;			// number of triangles
+GLuint skyibuffer;		// index buffer identifier
 
-int numBoids = 100;
+int numBoids = 1000;
 int centerSize = 4;
+
+int width = 512, height = 512;
 
 std::vector<glm::vec3> listBoid;
 std::vector<glm::vec3> rotationAxis;
+std::vector<GLfloat> rotationOffset;
 
 float normalizedRandom() {
 	int a = rand();
 	return 1.0f / ((a % 10)+1);
+}
+
+float sizedRandom(int size) {
+	int a = rand()%(size+1);
+	return  a*1.0f;
 }
 
 int randomNeg() {
@@ -55,26 +74,113 @@ int randomNeg() {
 	return a == 0 ? -1 : 1;
 }
 
+float is0or1() {
+	int a = rand() % 2;
+	return a == 0 ? 0 : 1.0f;
+}
+
 void initBoidsPos() {
 	listBoid.clear();
 	for (int i = 0; i < numBoids; i++) {
-		float dx = centerSize * normalizedRandom() * randomNeg();
-		float dy = centerSize * normalizedRandom() * randomNeg();
-		float dz = centerSize * normalizedRandom() * randomNeg();
-
-		float rx = normalizedRandom() * randomNeg();
-		float ry = normalizedRandom() * randomNeg();
-		float rz = normalizedRandom() * randomNeg();
-
+		//float dy = centerSize * normalizedRandom() * randomNeg();
+		//float dz = centerSize * normalizedRandom() * randomNeg();
 		//glm::vec3 pos(dx, dy, dz);
-		glm::vec3 pos(dx, dy, dz);
-		glm::vec3 rotate(rx, ry, rz);
+		//glm::vec3 rotate(rx, ry, rz);
+
+		float dx = centerSize * normalizedRandom() * randomNeg();
+		float rx = is0or1();
+		float ry = is0or1();
+		float rz = is0or1();
+
+		glm::vec3 pos(dx,dx,dx);
+		glm::vec3 rotate(rx,0.0f, rz);
+		
 		if(numBoids<100)
 			printf("%f %f %f\n", pos.x, pos.y, pos.z);
 
+		rotationOffset.push_back(sizedRandom(360));
 		listBoid.push_back(pos);
 		rotationAxis.push_back(rotate);
 	}
+
+}
+
+void initSky() {
+	GLuint vbuffer;
+	GLint vPosition;
+	GLint vNormal;
+
+	glGenVertexArrays(1, &skyVAO);
+	glBindVertexArray(skyVAO);
+
+	GLfloat vertices[8][4] = {
+			{ -1.0, -1.0, -1.0, 1.0 },		//0
+			{ -1.0, -1.0, 1.0, 1.0 },		//1
+			{ -1.0, 1.0, -1.0, 1.0 },		//2
+			{ -1.0, 1.0, 1.0, 1.0 },		//3
+			{ 1.0, -1.0, -1.0, 1.0 },		//4
+			{ 1.0, -1.0, 1.0, 1.0 },		//5
+			{ 1.0, 1.0, -1.0, 1.0 },		//6
+			{ 1.0, 1.0, 1.0, 1.0 }			//7
+	};
+
+	GLfloat normals[8][3] = {
+			{ -1.0, -1.0, -1.0 },			//0
+			{ -1.0, -1.0, 1.0 },			//1
+			{ -1.0, 1.0, -1.0 },			//2
+			{ -1.0, 1.0, 1.0 },				//3
+			{ 1.0, -1.0, -1.0 },			//4
+			{ 1.0, -1.0, 1.0 },				//5
+			{ 1.0, 1.0, -1.0 },				//6
+			{ 1.0, 1.0, 1.0 }				//7
+	};
+
+	GLuint indexes[36] = { 0, 1, 3, 0, 2, 3,
+		0, 4, 5, 0, 1, 5,
+		2, 6, 7, 2, 3, 7,
+		0, 4, 6, 0, 2, 6,
+		1, 5, 7, 1, 3, 7,
+		4, 5, 7, 4, 6, 7 };
+
+	skytriangles = 12;
+
+	glGenBuffers(1, &vbuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, vbuffer);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices) + sizeof(normals), NULL, GL_STATIC_DRAW);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
+	glBufferSubData(GL_ARRAY_BUFFER, sizeof(vertices), sizeof(normals), normals);
+
+	glGenBuffers(1, &skyibuffer);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, skyibuffer);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indexes), indexes, GL_STATIC_DRAW);
+
+	glUseProgram(skyprogram);
+	vPosition = glGetAttribLocation(skyprogram, "vPosition");
+	glVertexAttribPointer(vPosition, 4, GL_FLOAT, GL_FALSE, 0, 0);
+	glEnableVertexAttribArray(vPosition);
+	vNormal = glGetAttribLocation(skyprogram, "vNormal");
+	glVertexAttribPointer(vNormal, 3, GL_FLOAT, GL_FALSE, 0, (void*) sizeof(vertices));
+	glEnableVertexAttribArray(vNormal);
+}
+
+void createCubemap(const char* url, GLuint& Buffer) {
+	/*
+		load texture
+	*/
+	textureCube = loadCube(url);
+	glGenTextures(1, &Buffer);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, Buffer);
+	for (int i = 0; i < 6; i++) {
+		glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA, textureCube->width, textureCube->height,
+			0, GL_RGB, GL_UNSIGNED_BYTE, textureCube->data[i]);
+	}
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
 
 }
 
@@ -312,14 +418,33 @@ float speedk = 0.1f;
 static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
 	if (action == GLFW_PRESS || action == GLFW_REPEAT) {
-		printf("Key: %s\n", glfwGetKeyName(key, 0));
+		//printf("Key: %s\n", glfwGetKeyName(key, 0));
 		if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
 			glfwSetWindowShouldClose(window, GLFW_TRUE);
 
-		if (key == GLFW_KEY_R)
-			initBoidsPos();
+		if (action == GLFW_REPEAT) {
+			if (key == GLFW_KEY_EQUAL){
+				rotspeed += 0.0001;
+				printf("set rotaion speed %f\n", rotspeed);
+			}
+			else if (key == GLFW_KEY_MINUS){
+				rotspeed -= 0.0001;
+				printf("set rotaion speed %f\n",rotspeed);
+			}
+		}else if (action == GLFW_PRESS){
+			if (key == GLFW_KEY_R)
+				initBoidsPos();
+			if (key == GLFW_KEY_T)
+				createCubemap("D:\\Desktop\\Flocking_Boids\\BasicProgram\\Cubemap", SkyTextureBuffer);
+			if (key == GLFW_KEY_EQUAL){
+				rotspeed += 0.001;
+				printf("set rotaion speed %f\n",rotspeed);
+			}else if (key == GLFW_KEY_MINUS){
+				rotspeed -= 0.001;
+				printf("set rotaion speed %f\n",rotspeed);
+			}		
+		}
 	}
-
 }
 
 void framebufferSizeCallback(GLFWwindow *window, int w, int h) {
@@ -333,9 +458,12 @@ void framebufferSizeCallback(GLFWwindow *window, int w, int h) {
 
 	glfwMakeContextCurrent(window);
 
+	width = w;
+	height = h;
+
 	glViewport(0, 0, w, h);
 
-	projection = glm::perspective(0.7f, ratio, 1.0f, 100.0f);
+	projection = glm::perspective(0.7f, ratio, 1.0f, 1000.0f);
 
 }
 
@@ -344,17 +472,53 @@ void display(void) {
 	int viewLoc;
 	int projLoc;
 	int eyeLoc;
-
+	//pre-defines
 	eyex = (float)(r * sin(theta) * cos(phi));
 	eyey = (float)(r * sin(theta) * sin(phi));
 	eyez = (float)(r * cos(theta));
 
 	glm::vec3 eyepos(eyex, eyey, eyez);
-
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glUseProgram(sunprogram);
 
-	view = glm::lookAt(glm::vec3(eyex, eyey, eyez),
+	//sky 
+	glEnable(GL_DEPTH_TEST);
+	glUseProgram(skyprogram);
+
+	glm::mat4 viewsky(1.0f);
+	viewsky = glm::lookAt(
+		eyepos,
+		glm::vec3(0.0f, 0.0f, 0.0f),
+		glm::vec3(0.0f, 0.0f, 1.0f)
+	);
+
+	glm::mat4 skySize = glm::scale(glm::mat4(1.0f), glm::vec3(100 * width / height));
+
+	viewLoc = glGetUniformLocation(skyprogram, "modelView");
+	glUniformMatrix4fv(viewLoc, 1, 0, glm::value_ptr(viewsky * skySize));
+	projLoc = glGetUniformLocation(skyprogram, "projection");
+	glUniformMatrix4fv(projLoc, 1, 0, glm::value_ptr(projection));
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, SkyTextureBuffer);
+	GLuint skyboxTextureId = glGetUniformLocation(skyprogram, "tex");
+	glUniform1i(skyboxTextureId, 0);
+
+	glDepthMask(GL_FALSE);
+	glDisable(GL_DEPTH_TEST);
+	glFrontFace(GL_CCW);
+	glDisable(GL_CULL_FACE);
+
+
+	glBindVertexArray(skyVAO);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, skyibuffer);
+	//glDrawElements(GL_TRIANGLES, 3 * skytriangles, GL_UNSIGNED_INT, NULL);
+
+	glDepthMask(GL_TRUE);
+	glEnable(GL_DEPTH_TEST);
+
+	//sun 
+	glUseProgram(sunprogram);
+	view = glm::lookAt(eyepos,
 		glm::vec3(0.0f, 0.0f, 0.0f),
 		glm::vec3(0.0f, 0.0f, 1.0f));
 
@@ -362,7 +526,7 @@ void display(void) {
 	projLoc = glGetUniformLocation(sunprogram, "projection");
 	eyeLoc = glGetUniformLocation(sunprogram, "Eye");
 
-	view = glm::scale(view, glm::vec3(scalef * centerSize));
+	view = glm::scale(view, glm::vec3(glm::max(scalef * centerSize,0.0f)));
 	glUniformMatrix4fv(viewLoc, 1, 0, glm::value_ptr(view));
 	glUniformMatrix4fv(projLoc, 1, 0, glm::value_ptr(projection));
 	glUniform3fv(eyeLoc, 1, glm::value_ptr(eyepos));
@@ -370,7 +534,8 @@ void display(void) {
 	glBindVertexArray(sphereVAO);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sibuffer);
 	glDrawElements(GL_TRIANGLES, 3 * striangles, GL_UNSIGNED_INT, NULL);
-
+	
+	//Boids
 	glUseProgram(program);
 
 	viewLoc = glGetUniformLocation(program, "modelView");
@@ -381,19 +546,18 @@ void display(void) {
 		glm::mat4 scale(1.0f);
 		glm::mat4 transform(1.0f);
 
-		view = glm::lookAt(glm::vec3(eyex, eyey, eyez),
+		view = glm::lookAt(eyepos,
 			glm::vec3(0.0f, 0.0f, 0.0f),
 			glm::vec3(0.0f, 0.0f, 1.0f));
 
-		scale = glm::scale(scale, glm::vec3(scalef));
+		scale = glm::scale(scale, glm::vec3(glm::max(scalef,0.0f)));
 
 		view *= scale;
 
-		transform = glm::rotate(transform, rot, rotationAxis[i]);
+		transform = glm::rotate(transform, rot * rotationOffset[i], rotationAxis[i]);
 		transform = glm::translate(transform, modelScale * listBoid[i]);
-		transform = glm::rotate(transform, rot, rotationAxis[i]);
-
-		//transform = glm::translate(transform, -1.0f*listBoid[i]);
+		//transform = glm::translate(transform, modelScale * glm::vec3(0.0,1.0,0.0));
+		transform = glm::rotate(transform,90.0f, glm::vec3(0.0,0.0,-1.0));
 
 		view *= transform;
 
@@ -405,7 +569,11 @@ void display(void) {
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibuffer);
 		glDrawElements(GL_TRIANGLES, 3*triangles, GL_UNSIGNED_INT, NULL);
 	}
-	rot += 0.01;
+
+	
+
+	//updates
+	rot += rotspeed;
 	if (rot > 360.0f) {
 		rot = 0;
 	}
@@ -436,8 +604,7 @@ int main(int argc, char **argv) {
 
 	window = glfwCreateWindow(512, 512, "GLFW", NULL, NULL);
 
-	if (!window)
-	{
+	if (!window){
 		glfwTerminate();
 		exit(EXIT_FAILURE);
 	}
@@ -467,7 +634,7 @@ int main(int argc, char **argv) {
 	glClearColor(0.0, 0.0, 0.0, 1.0);
 	glViewport(0, 0, 512, 512);
 
-	projection = glm::perspective(0.7f, 1.0f, 1.0f, 100.0f);
+	projection = glm::perspective(0.7f, 1.0f, 1.0f, 1000.0f);
 
 	vs = buildShader(GL_VERTEX_SHADER, (char*)"vert.vs");
 	fs = buildShader(GL_FRAGMENT_SHADER, (char*)"frag.fs");
@@ -480,8 +647,14 @@ int main(int argc, char **argv) {
 	sunprogram = buildProgram(vs, fs, 0);
 	dumpProgram(sunprogram, (char*)"sun program");
 
+	vs = buildShader(GL_VERTEX_SHADER, (char*)"skyv.vs");
+	fs = buildShader(GL_FRAGMENT_SHADER, (char*)"skyf.fs");
+	skyprogram = buildProgram(vs, fs, 0);
+	dumpProgram(skyprogram, (char*)"sky program");
+
 	initBoids();
 	initSphere();
+	initSky();
 
 	eyex = 0.0;
 	eyez = 0.0;
@@ -496,6 +669,9 @@ int main(int argc, char **argv) {
 
 	//create init position
 	initBoidsPos();
+
+	//create texture
+	createCubemap("D:\\Desktop\\Flocking_Boids\\BasicProgram\\Cubemap",SkyTextureBuffer);
 
 	// GLFW main loop, display model, swapbuffer and check for input
 
