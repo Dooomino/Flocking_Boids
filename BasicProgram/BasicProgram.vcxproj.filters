@@ -15,26 +15,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <None Include="frag.fs">
-      <Filter>Resource Files</Filter>
-    </None>
-    <None Include="vert.vs">
-      <Filter>Resource Files</Filter>
-    </None>
-    <None Include="Sfrag.fs">
-      <Filter>Resource Files</Filter>
-    </None>
-    <None Include="Svert.vs">
-      <Filter>Resource Files</Filter>
-    </None>
-    <None Include="skyf.fs">
-      <Filter>Resource Files</Filter>
-    </None>
-    <None Include="skyv.vs">
-      <Filter>Resource Files</Filter>
-    </None>
-  </ItemGroup>
-  <ItemGroup>
     <ClCompile Include="Shaders.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -45,6 +25,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="texture.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Mesh.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -61,5 +44,16 @@
     <ClInclude Include="texture.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Mesh.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Shaders\frag.fs">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Shaders\vert.vs">
+      <Filter>Resource Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

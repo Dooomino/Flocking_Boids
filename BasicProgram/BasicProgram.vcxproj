@@ -19,24 +19,22 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <None Include="frag.fs" />
-    <None Include="Sfrag.fs" />
-    <None Include="skyf.fs" />
-    <None Include="skyv.vs" />
-    <None Include="Svert.vs" />
-    <None Include="vert.vs" />
-  </ItemGroup>
-  <ItemGroup>
+    <ClCompile Include="Mesh.cpp" />
     <ClCompile Include="Shaders.cpp" />
     <ClCompile Include="texture.cpp" />
     <ClCompile Include="tiny_obj_loader.cc" />
     <ClCompile Include="viewer.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Mesh.h" />
     <ClInclude Include="Shaders.h" />
     <ClInclude Include="texture.h" />
     <ClInclude Include="tiny_obj_loader.h" />
     <ClInclude Include="viewer.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Shaders\frag.fs" />
+    <None Include="Shaders\vert.vs" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
