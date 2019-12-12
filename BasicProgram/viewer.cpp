@@ -20,43 +20,62 @@
 #include "texture.h"
 #include "Mesh.h"
 
+//#define DEBUGs
 
-#define R_Factor 0.01f
+#define R_Factor 0.01f		//camera Rotation speed
 
-float eyex, eyey, eyez;	// current user position
-float vx, vy, vz;	// current user position
-float scalef=0.1f;   // scale factor
-double theta, phi;		// user's position  on a sphere centered on the object
-double r;				// radius of the sphere
-float rot = 0;
-float rotspeed = 0.05;
+#define BOIDS_S 20			// slop of Boids movement
 
-glm::mat4 projection;	// projection matrix
+float eyex, eyey, eyez;		// current user position
+float vx, vy, vz;			// current user position
+float scalef=0.1f;			// scale factor
+double theta, phi;			// user's position  on a sphere centered on the object
+double r;					// radius of the sphere
+float rot = 0;				// dynamic rotation angle 
+float rotspeed = 0.013f;	// rotation speed
+
+glm::mat4 projection;		// projection matrix
 
 //Boids
-GLuint program;
+GLuint boidprogram;
 Mesh boids("Boids");
+
+//Center
+GLuint program;
 Mesh sphere("Sphere");
 
+// Obstacle
+GLuint obsprogram;
+Mesh vox("VOX");
 
-int width = 512, height = 512;
+// Circle
+GLuint cirprogram;
+Mesh circle("cir");
 
 
-double lastX = 0, lastY = 0;
+int width = 512, height = 512;	//	Window Size 
+
+//	Mouse Controls
+
+double lastX = 0, lastY = 0;	
 double lastsY = 0;
 double mouseX = 0, mouseY = 0;
-double speed = 0.01f;
-float speedk = 0.1f;
+double speed = 0.01f;			// Camera Rotaion speed
 
-glm::mat4 view;
-int viewLoc;
+
+//	Uniform Locations 
+glm::mat4 view;							// Profectoin Matrix
+glm::vec3 eyepos;						// Camera position
+glm::vec3 origin = glm::vec3(0,0,0);	// Center 
+glm::vec3 lookCenter = origin;			// Look at 
+bool isFocus = false;
+
+int viewLoc;					
 int projLoc;
 int texLoc;
 int eyeLoc;
 
-bool animate = true;
-glm::vec3 eyepos;
-
+bool animate = true;			// [Space] key for start or pause the animation
 
 //pre-defines
 
@@ -87,38 +106,64 @@ float is0or1() {
 	return a == 0 ? 0 : 1.0f;
 }
 
+float bezier_curve(float a, float x) {
+	float a1 = 1;
+	float a2 = .2;
+	float a3 = 0.04;
+	float a4 = 0;
 
-int numBoids = 100;
-float boidsSize = 0.5f;
-float centerSize = 4.0f;
-float flockSize = boidsSize + 1.0f;
-float scater = 1;
+	float y =   pow(1 - x, 3) * a1 +
+				3 * pow(1 - x, 2) * x * a2 +
+				3 * (1 - x) * pow(x, 2) * a3 +
+				pow(x, 3) * a4;
+	return a * y;
+}
 
-glm::vec3 obstaclePos;// ((centerSize / 2 + flockSize)* center.x, 0.0, center.z);
+//Euclidean distance
+float distof(float a, float b) {
+	return sqrt(a*a + b*b);
+}
 
-std::vector<glm::vec3> listBoid;
+float scaterf(float a, float x) {
+	a = abs(a);
+	return a * pow(exp(1), -1/exp(a / (BOIDS_S) * x));
+	//return bezier_curve(a,x);
+}
+float convergef(float a,float x) {
+	a = abs(a);
+	return  a * pow(exp(1), -exp(a / (BOIDS_S) * x));
+	//return -bezier_curve(a, x);
+}
+
+// Boids Properties
+int numBoids = 100;						//	Number Of Boids
+float boidsSize = 0.5f;					//	Object Size of each Boid
+float centerSize = 4.0f;				//	The Gap in Center
+float flockSize = boidsSize + 1.0f;		//	Flock Size of Boids
+float scater = 1;						//	dynamic Scater value scater boids when [S] hit 
+float therhold = 0.2f;					//	reaction time of boids movment (How close to the obstacle)
+
+glm::vec3 obstaclePos;					// ((centerSize / 2 + flockSize)* boidCenter.x, 0.0, boidCenter.z);
+float obsAngle = 0;						//obstacle rotation angle
+
+// Storage of boids
+std::vector<glm::vec3> listBoid;		
+std::vector<glm::vec3> shifts;
 std::vector<GLfloat> rotationOffset;
 
-glm::vec3 center(3.0f, 0, 0);
+glm::vec3 boidCenter(3.0f, 0, 0);
 
-void initBoidsPos() {
+void initBoidsPos() {	
 	listBoid.clear();
+	shifts.clear();
 	for (int i = 0; i < numBoids; i++) {
-		//float dy = centerSize * normalizedRandom() * randomNeg();
-		//float dz = centerSize * normalizedRandom() * randomNeg();
-		//glm::vec3 pos(dx, dy, dz);
-		//glm::vec3 rotate(rx, ry, rz);
 
-		double dx = centerSize*2 + center.x + sizedRandom(flockSize) * randomNeg();
-		double dz = center.z + sizedRandom(flockSize) * randomNeg();
+		double dx = centerSize*2 + boidCenter.x + sizedRandom(flockSize) * randomNeg();
+		double dz = boidCenter.z + sizedRandom(flockSize) * randomNeg();
 		double dy = -dz;
 
 		glm::vec3 pos(dx, dy, dz);
 		float offset = sizedRandom(M_2_PI); 
-
-		//
-		float speed = normalizedRandom();
-		//
 
 		if (numBoids < 10) {
 			printf("%f %f %f\n", pos.x, pos.y, pos.z);
@@ -127,6 +172,7 @@ void initBoidsPos() {
 
 		rotationOffset.push_back(offset);
 		listBoid.push_back(pos);
+		shifts.push_back(glm::vec3(0.0f));
 
 	}
 
@@ -138,11 +184,6 @@ void init(const char* file, Mesh& model, GLuint& p) {
 	GLint vPosition;
 	GLint vNormal;
 	GLint vTex;
-
-	/*GLfloat vertices = model.vertices;
-	GLfloat normals = model.normals;
-	GLuint indices = model.indices;
-	*/
 
 	std::vector<tinyobj::shape_t> shapes;
 	std::vector<tinyobj::material_t> materials;
@@ -180,6 +221,31 @@ void init(const char* file, Mesh& model, GLuint& p) {
 		model.vertices[i] = shapes[0].mesh.positions[i];
 	}
 
+	//find size
+	float xmax = 0, xmin = INFINITY;
+	float ymax = 0, ymin = INFINITY;
+	float zmax = 0, zmin = INFINITY;
+	for (int i = 0; i < model.nv; i+=3) {
+		//x
+		if (xmax < model.vertices[i])
+			xmax = model.vertices[i];
+		if (xmin > model.vertices[i])
+			xmin = model.vertices[i];
+		//y
+		if (ymax < model.vertices[i + 1])
+			ymax = model.vertices[i + 1];
+		if (ymin > model.vertices[i + 1])
+			ymin = model.vertices[i + 1];
+		//z
+		if (zmax < model.vertices[i + 2])
+			zmax = model.vertices[i + 2];
+		if (zmin > model.vertices[i + 2])
+			zmin = model.vertices[i + 2];
+	}
+
+	model.size = glm::vec3(xmax - xmin, ymax - ymin, zmax - zmin);
+
+
 	/*  Retrieve the vertex normals */
 
 	nn = (int)shapes[0].mesh.normals.size();
@@ -206,26 +272,9 @@ void init(const char* file, Mesh& model, GLuint& p) {
 		tex[i] = shapes[0].mesh.texcoords[i];
 	}
 
-	//double verts = nv / 3;
-	//nt = 2 * verts;
-	//for (i = 0; i < verts; i++) {
-	//	GLfloat x = vertices[3 * i];
-	//	GLfloat y = vertices[3 * i + 1];
-	//	GLfloat z = vertices[3 * i + 2];
-	//	theta = atan2(x,z);
-	//	phi = atan2(y,sqrt(x*x + z*z));
-
-	//	//tex[2 * i] = (theta+M_PI) / (2 * M_PI);
-	//	tex[2 * i] = fabs(theta) / M_PI;
-	//	
-	//	tex[2 * i + 1] = phi / M_PI;
-	//}
-
-
 	glGenBuffers(1, &vbuffer);
 	glBindBuffer(GL_ARRAY_BUFFER, vbuffer);
-	glBufferData(GL_ARRAY_BUFFER, (nv + nn + nt) * sizeof(GLfloat), NULL,
-		GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, (nv + nn + nt) * sizeof(GLfloat), NULL, GL_STATIC_DRAW);
 	glBufferSubData(GL_ARRAY_BUFFER, 0, nv * sizeof(GLfloat), model.vertices);
 	glBufferSubData(GL_ARRAY_BUFFER, nv * sizeof(GLfloat), nn * sizeof(GLfloat), model.normals);
 	glBufferSubData(GL_ARRAY_BUFFER, (nv + nn) * sizeof(GLfloat), nt * sizeof(GLfloat),
@@ -267,8 +316,26 @@ void start() {
 	program = buildProgram(vs, fs, 0);
 	dumpProgram(program, (char*)"shader program");
 
-	init("Meshes/boids.obj", boids, program);
+	vs = buildShader(GL_VERTEX_SHADER, (char*)"Shaders/vert.vs");
+	fs = buildShader(GL_FRAGMENT_SHADER, (char*)"Shaders/frag.fs");
+	cirprogram = buildProgram(vs, fs, 0);
+	//dumpProgram(program, (char*)"shader program");
+
+	vs = buildShader(GL_VERTEX_SHADER, (char*)"Shaders/boids.vs");
+	fs = buildShader(GL_FRAGMENT_SHADER, (char*)"Shaders/boids.fs");
+	boidprogram = buildProgram(vs, fs, 0);
+	dumpProgram(boidprogram, (char*)"boids program");
+
+	vs = buildShader(GL_VERTEX_SHADER, (char*)"Shaders/obstacle.vs");
+	fs = buildShader(GL_FRAGMENT_SHADER, (char*)"Shaders/obstacle.fs");
+	obsprogram = buildProgram(vs, fs, 0);
+	dumpProgram(obsprogram, (char*)"obs program");
+
+	init("Meshes/drone.obj", boids, boidprogram);
+	//init("Meshes/boids.obj", boids, boidprogram);
 	init("Meshes/sphere.obj", sphere, program);
+	init("Meshes/circle.obj", circle, cirprogram);
+	init("Meshes/voxelBall.obj", vox, obsprogram);
 
 	//create init position
 	initBoidsPos();
@@ -280,30 +347,135 @@ void start() {
 	phi = 1.5;
 	r = 10.0;
 
-	obstaclePos = glm::vec3((centerSize / 2 + flockSize) * center.x, 0.0, center.z);
+	obstaclePos = glm::vec3((centerSize / 2 + flockSize) * boidCenter.x, 0.0, boidCenter.z);
 
 }
 
 void update() {
-	//updates
 	if (animate) {
+		//updates
 		rot += rotspeed;
-		if (rot > 360.0f) {
+		if (rot >= 2*M_PI) {
 			rot = 0;
 		}
-	}
-	scater -= 0.1;
-	if (scater < 1) {
-		scater = 1;
-	}
 
+		scater -= 0.1;
+		if (scater < 1) {
+			scater = 1;
+		}
+
+		//	Collisions 
+		obstaclePos = glm::vec3((centerSize / 2 + flockSize) * boidCenter.x, 0.0, boidCenter.z);
+
+		for (int i = 0; i < listBoid.size(); i++) {
+			float angle = rot + rotationOffset[i];							//	Current Boid Angle
+			float angleDiff = (angle - obsAngle) / (2 * M_PI);				//	angle distance between Boids & Obstacle
+			float px = (listBoid[i].x + shifts[i].x);						//	X position of boid
+			float pz = (listBoid[i].z + shifts[i].z);						//	Z position of boid
+			float distx = px * cos(angle) - obstaclePos.x * cos(obsAngle);	//	linear-X distace between Boids & Obstacle
+			float distz = pz - obstaclePos.z;								//	linear-Z distace between Boids & Obstacle
+			 
+			float weightx = 1.0f;											//	weight of x
+			float weightz = 1.0f;											//	weight of z
+			/*
+				Weight is caculated by compareing differece of 
+				x - distance and z - distance and then appliy
+				diference on the multiplier.
+			*/
+			if (distx > distz) {
+				weightz *= 1 - 1/abs(distx - distz);
+				weightx *= 1 + 1/abs(distx - distz);
+			}else {
+				weightx *= 1 - 1/abs(distx - distz);
+				weightz *= 1 + 1/abs(distx - distz);
+			}
+
+			//	Before
+			if ( angleDiff < 1 ) {
+				if (angleDiff > therhold) {
+					if (distx >= 0) {
+						shifts[i].x = scaterf(distx, angleDiff) * weightx;
+					}else {
+						shifts[i].x = convergef(distx, angleDiff) * weightx;
+					}
+
+					if (distz >= 0) {
+						shifts[i].z = scaterf(distz, angleDiff) * weightz;
+					}else {
+						shifts[i].z = convergef(distz, angleDiff) * weightz;
+					}
+				}
+			}
+			
+			//	After
+			else if(angleDiff > 1){
+				if (angleDiff < 1+therhold) {
+					if (distx >= 0) {
+						shifts[i].x = convergef(distx, angleDiff) * weightx;
+					}else {
+						shifts[i].x = scaterf(distx, angleDiff) * weightx;
+					}
+
+					if (distz >= 0) {
+						shifts[i].z = convergef(distz, angleDiff) * weightz;
+					}else {
+						shifts[i].z = scaterf(distz, angleDiff) * weightz;
+					}
+				}
+			}
+			#ifdef DEBUG
+				if (i == 0) {
+				
+					if (angleDiff > therhold) {
+						printf("Sacter: ");
+					}
+					else{
+						printf("Converge:");
+					}
+					printf("shiftx %d: %f, distx %f,distz %f, angle %f, diff %f\n"
+						"",
+						i, shifts[i].x, distx, distz, angle, angleDiff);
+				}
+			#endif	
+			//	Self awareness
+			for (int j = 0; j < listBoid.size(); j++) {
+				glm::vec3  p1 = (listBoid[i]+shifts[i])* cos(angle);
+				glm::vec3  p2 = (listBoid[j]+shifts[j])* cos(angle);
+				glm::vec3 dist = glm::abs( p1 - p2);
+				
+				//x
+				if (dist.x < boids.size.x) {
+					shifts[i].x += 0.000001;
+				}
+
+				//z
+				if (dist.z < boids.size.z) {
+					shifts[i].z += 0.000001;
+				}
+
+			}
+		}
+	}
+	//	Update Camera
 	vx = (float)(r * sin(theta) * cos(phi));
 	vy = (float)(r * sin(theta) * sin(phi));
 	vz = (float)(r * cos(theta));
 
-	//eyepos = glm::vec3(eyex, eyey, eyez);
 	eyepos = glm::vec3(vx, vy, vz);
-	obstaclePos = glm::vec3((centerSize / 2 + flockSize) * center.x, 0.0, center.z);
+	
+	view = glm::lookAt(eyepos,
+		lookCenter,
+		glm::vec3(0.0f, 0.0f, 1.0f)
+	);
+
+	//	(Unfinished Function focus look)
+	if (isFocus) {
+		lookCenter = obstaclePos;
+	}
+	else {
+		lookCenter = origin;
+	}
+
 
 }
 
@@ -311,35 +483,49 @@ void display(void) {
 	
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	
-	//Boids
+	// Center
 	glUseProgram(program);
 
 	viewLoc = glGetUniformLocation(program, "modelView");
 	projLoc = glGetUniformLocation(program, "projection");
 	eyeLoc = glGetUniformLocation(program, "Eye");
 
-	view = glm::lookAt(eyepos,
-		glm::vec3(0.0f, 0.0f, 0.0f),
-		glm::vec3(0.0f, 0.0f, 1.0f)
-	);
-
-	/*view = glm::rotate(view, vx, glm::vec3(1.0, 0.0, 0.0));
-	view = glm::rotate(view, vy, glm::vec3(0.0, 1.0, 0.0));
-	view = glm::rotate(view, vz, glm::vec3(0.0, 0.0, 1.0));*/
-
 	glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(glm::max(centerSize * scalef, 0.0f)));
 
 	glUniformMatrix4fv(viewLoc, 1, 0, glm::value_ptr(view * scale));
 	glUniformMatrix4fv(projLoc, 1, 0, glm::value_ptr(projection));
 	glUniform3fv(eyeLoc, 1, glm::value_ptr(eyepos));
-
+	   
 	glBindVertexArray(sphere.vao);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sphere.ibuffer);
 	glDrawElements(GL_TRIANGLES, 3 * sphere.triangles, GL_UNSIGNED_INT, NULL);
+
+#ifdef DEBUG
+	//circle
+	glm::mat4 cirtransform(1.0f);
+	float cirround = ((centerSize / 2 + flockSize) * boidCenter).x;
+	cirtransform = glm::scale(cirtransform, glm::vec3(cirround, cirround, 1.0));
+	cirtransform = glm::rotate(cirtransform,90.0f,glm::vec3(1.0f,0.0,0.0));
+
+	glUniformMatrix4fv(viewLoc, 1, 0, glm::value_ptr(view * scale *cirtransform));
+	glUniformMatrix4fv(projLoc, 1, 0, glm::value_ptr(projection));
+	glUniform3fv(eyeLoc, 1, glm::value_ptr(eyepos));
+
+	glBindVertexArray(circle.vao);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, circle.ibuffer);
+	glDrawElements(GL_LINES, 3 * circle.triangles, GL_UNSIGNED_INT, NULL);
+#endif // DEBUG
 	
-	
+	//Obstacle 
+	glUseProgram(obsprogram);
+
+	viewLoc = glGetUniformLocation(obsprogram, "modelView");
+	projLoc = glGetUniformLocation(obsprogram, "projection");
+	eyeLoc = glGetUniformLocation(obsprogram, "Eye");
+
 	glm::mat4 transform(1.0f);
 
+	transform = glm::rotate(transform, obsAngle, glm::vec3(0, 0, 1.0f));
 	transform = glm::translate(transform,obstaclePos);
 	transform = glm::scale(transform, glm::vec3(0.5));
 
@@ -347,37 +533,37 @@ void display(void) {
 	glUniformMatrix4fv(projLoc, 1, 0, glm::value_ptr(projection));
 	glUniform3fv(eyeLoc, 1, glm::value_ptr(eyepos));
 
-	glBindVertexArray(sphere.vao);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sphere.ibuffer);
-	glDrawElements(GL_TRIANGLES, 3 * sphere.triangles, GL_UNSIGNED_INT, NULL);
+	glBindVertexArray(vox.vao);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vox.ibuffer);
+	glDrawElements(GL_TRIANGLES, 3 * vox.triangles, GL_UNSIGNED_INT, NULL);
+
+
+	//Boids
+	glUseProgram(boidprogram);
+
+	viewLoc = glGetUniformLocation(boidprogram, "modelView");
+	projLoc = glGetUniformLocation(boidprogram, "projection");
+	eyeLoc = glGetUniformLocation(boidprogram, "Eye");
+	GLuint markLoc = glGetUniformLocation(boidprogram, "marked");
 
 	for (int i = 0; i < numBoids; i++) {
 		glm::mat4 transform(1.0f);
 
-	/*	view = glm::lookAt(eyepos,
-			glm::vec3(0.0f, 0.0f, 0.0f),
-			glm::vec3(0.0f, 0.0f, 1.0f));
-
-		view = glm::rotate(view, vx, glm::vec3(1.0, 0.0, 0.0));
-		view = glm::rotate(view, vy, glm::vec3(0.0, 1.0, 0.0));
-		view = glm::rotate(view, vz, glm::vec3(0.0, 0.0, 1.0));*/
-
-		//
 		transform = glm::rotate(transform, (rot + rotationOffset[i]), glm::vec3(0, 0, 1.0f));
 
-		transform = glm::translate(transform, scater * listBoid[i] * glm::vec3(1.0, 0.0 , 1.0));
-	
-		//translate = glm::translate(translate, modelScale * glm::vec3(0.0,1.0,0.0));
+		transform = glm::translate(transform, scater * (listBoid[i] + shifts[i]));
+		
 		transform = glm::rotate(transform,90.0f, glm::vec3(1.0,0.0,0.0));
 
-		//transform = glm::translate(transform, scater * listBoid[i] * glm::vec3(0.0, 0.0, 1.0));
-
 		transform = glm::scale(transform, glm::vec3(glm::max(boidsSize, 0.0f)));
-
 
 		glUniformMatrix4fv(viewLoc, 1, 0, glm::value_ptr(view *scale * transform));
 		glUniformMatrix4fv(projLoc, 1, 0, glm::value_ptr(projection));
 		glUniform3fv(eyeLoc, 1, glm::value_ptr(eyepos));
+		if (i == 0) 
+			glUniform1i(markLoc, 1);
+		else 
+			glUniform1i(markLoc, 0);
 
 		glBindVertexArray(boids.vao);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, boids.ibuffer);
@@ -423,7 +609,7 @@ int main(int argc, char **argv) {
 		printf("Error starting GLEW: %s\n", glewGetErrorString(error));
 		exit(0);
 	}
-	//printf("%f\n", 1.0f/(rand()%10));
+
 	glEnable(GL_DEPTH_TEST);
 	glClearColor(0.0, 0.0, 0.0, 1.0);
 	glViewport(0, 0, 512, 512);
@@ -468,12 +654,8 @@ void error_callback(int error, const char* description)
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
 	float distance =  yoffset;
 	float scaleChange = distance * R_Factor;
-	/*if (yoffset > 0.0f) {
-		scaleChange *= -1.0f;
-	}*/
 	scalef += scaleChange;
-	scalef = scalef > 0 ? scalef : (0+.000000001f);
-	//printf("%f\n", scalef);
+	scalef = scalef > 0 ? scalef : (0.000000001f);
 }
 
 static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
@@ -493,7 +675,6 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
 		if (!std::isinf(lastX) && !std::isinf(lastY)) {
 			float dx = lastX - (float)x;
 			float dy = lastY - (float)y;
-			printf("%f %f\n", dx, dy);
 
 			float xrot = glm::abs(dx / 100);
 			if (dx > 0) {
@@ -532,11 +713,29 @@ static void mouse_button_callback(GLFWwindow* window, int button, int action, in
 static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
 	if (action == GLFW_PRESS || action == GLFW_REPEAT) {
-		//printf("Key: %s\n", glfwGetKeyName(key, 0));
 		if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
 			glfwSetWindowShouldClose(window, GLFW_TRUE);
 
 		if (action == GLFW_REPEAT) {
+			if (key == GLFW_KEY_EQUAL) {
+				rotspeed += 0.001;
+				printf("set rotaion speed %f\n", rotspeed);
+			}
+			else if (key == GLFW_KEY_MINUS) {
+				rotspeed -= 0.001;
+				printf("set rotaion speed %f\n", rotspeed);
+			}
+		}
+		else if (action == GLFW_PRESS) {
+			if (key == GLFW_KEY_R) {
+				initBoidsPos();
+				scater = 0;
+			}
+			if (key == GLFW_KEY_O) {
+				isFocus = !isFocus;
+			}
+			if (key == GLFW_KEY_S)
+				scater += 10;
 			if (key == GLFW_KEY_EQUAL) {
 				rotspeed += 0.0001;
 				printf("set rotaion speed %f\n", rotspeed);
@@ -545,22 +744,11 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
 				rotspeed -= 0.0001;
 				printf("set rotaion speed %f\n", rotspeed);
 			}
-		}
-		else if (action == GLFW_PRESS) {
-			if (key == GLFW_KEY_R)
-				initBoidsPos();
-			if (key == GLFW_KEY_S)
-				scater += 10;
-			if (key == GLFW_KEY_EQUAL) {
-				rotspeed += 0.01;
-				printf("set rotaion speed %f\n", rotspeed);
-			}
-			else if (key == GLFW_KEY_MINUS) {
-				rotspeed -= 0.01;
-				printf("set rotaion speed %f\n", rotspeed);
-			}
 			if (key == GLFW_KEY_SPACE)
 				animate = !animate;
+		}
+		if (rotspeed <= 0) {
+			rotspeed = 0;
 		}
 	}
 }

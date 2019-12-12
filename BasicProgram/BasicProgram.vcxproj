@@ -33,7 +33,11 @@
     <ClInclude Include="viewer.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="Shaders\boids.fs" />
+    <None Include="Shaders\boids.vs" />
     <None Include="Shaders\frag.fs" />
+    <None Include="Shaders\obstacle.fs" />
+    <None Include="Shaders\obstacle.vs" />
     <None Include="Shaders\vert.vs" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

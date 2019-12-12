@@ -55,5 +55,17 @@
     <None Include="Shaders\vert.vs">
       <Filter>Resource Files</Filter>
     </None>
+    <None Include="Shaders\boids.fs">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Shaders\boids.vs">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Shaders\obstacle.fs">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Shaders\obstacle.vs">
+      <Filter>Resource Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

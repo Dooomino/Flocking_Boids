@@ -273,7 +273,7 @@ namespace glm
 
 	/// Define a picking region
 	///
-	/// @param center
+	/// @param boidCenter
 	/// @param delta
 	/// @param viewport
 	/// @tparam T Native type used for the computation. Currently supported: half (not recommanded), float or double.
@@ -288,7 +288,7 @@ namespace glm
 	/// Build a look at view matrix.
 	///
 	/// @param eye Position of the camera
-	/// @param center Position where the camera is looking at
+	/// @param boidCenter Position where the camera is looking at
 	/// @param up Normalized up vector, how the camera is oriented. Typically (0, 0, 1)
 	/// @see gtc_matrix_transform
 	/// @see - frustum(T const & left, T const & right, T const & bottom, T const & top, T const & nearVal, T const & farVal) frustum(T const & left, T const & right, T const & bottom, T const & top, T const & nearVal, T const & farVal)

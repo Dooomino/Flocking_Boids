@@ -8,7 +8,8 @@ public:
 	GLuint ibuffer;		// number of triangles
 	int triangles;		// index buffer identifierSSS
 	const char* name;
-	
+	glm::vec3 size = glm::vec3(0.0f);
+
 	GLfloat* vertices;
 	GLfloat* normals;
 	GLuint* indices;
