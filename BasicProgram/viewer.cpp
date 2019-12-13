@@ -135,7 +135,7 @@ float boidsSize = 0.5f;					//	Object Size of each Boid
 float centerSize = 4.0f;				//	The Gap in Center
 float flockSize = boidsSize + 1.0f;		//	Flock Size of Boids
 float scater = 1;						//	dynamic Scater value scater boids when [S] hit 
-float therhold = 0.2f;					//	reaction time of boids movment (How close to the obstacle)
+float threshold = 0.2f;					//	reaction time of boids movment (How close to the obstacle)
 
 glm::vec3 obstaclePos;					// ((centerSize / 2 + flockSize)* boidCenter.x, 0.0, boidCenter.z);
 float obsAngle = 0;						//obstacle rotation angle
@@ -470,8 +470,12 @@ void update() {
 			}
 
 			//	Before
+			/* 
+				Due to the differece is repersented by percentage of 2 PI,
+				when AngleDiff == 1 the Boids is meet up with Obstacle.	
+			*/
 			if ( angleDiff > 1 ) {
-				if (angleDiff > therhold) {
+				if (angleDiff > threshold) {
 					if (distx >= 0) {
 						shifts[i].x = scatterf(distx, angleDiff) * weightx;
 					}else {
@@ -488,7 +492,7 @@ void update() {
 			
 			//	After
 			else{
-				if (angleDiff < 1+therhold) {
+				if (angleDiff < 1+threshold) {
 					if (distx >= 0) {
 						shifts[i].x = convergef(distx, angleDiff) * weightx;
 					}else {
@@ -501,10 +505,7 @@ void update() {
 						shifts[i].z = convergef(-distz, angleDiff) * weightz;
 					}
 				}
-				// none of both
-				
 			}
-
 			#ifdef DEBUG
 				glm::vec3  p1 = (shifts[0]);
 				glm::vec3  p2 = (shifts[1]);
@@ -535,7 +536,6 @@ void update() {
 				//x
 				if (abs((p1 / p2).x) < 2 && abs((p1 / p2).x) > 0)
 					if (abs((p1 / p2).x) < 0.2)
-						//p1 = p1;
 						shifts[i].x -= abs((p1 / p2).x) * dist.x /abs(dist.x);
 			}
 		}
@@ -552,15 +552,12 @@ void update() {
 		glm::vec3(0.0f, 0.0f, 1.0f)
 	);
 
-	//	(Unfinished Function focus look)
+	//	(Unfinished Function: Focus Look)
 	if (isFocus) {
 		lookCenter = obstaclePos;
-	}
-	else {
+	}else {
 		lookCenter = origin;
 	}
-
-
 }
 
 void display(void) {
@@ -568,7 +565,6 @@ void display(void) {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	glm::mat4 skySize = glm::scale(glm::mat4(1.0f),glm::vec3(10.0f));
-
 
 	glUseProgram(cubeProgram);
 	viewLoc = glGetUniformLocation(cubeProgram, "modelView");
@@ -841,11 +837,8 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
 				initBoidsPos();
 				scater = 0;
 			}
-			if (key == GLFW_KEY_O) {
-				isFocus = !isFocus;
-			}
-			if (key == GLFW_KEY_S)
-				scater += 10;
+		/*	if (key == GLFW_KEY_S)
+				scater += 10;*/
 			if (key == GLFW_KEY_EQUAL) {
 				rotspeed += 0.0001;
 				printf("set rotaion speed %f\n", rotspeed);
