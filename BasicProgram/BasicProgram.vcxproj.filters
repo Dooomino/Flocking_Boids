@@ -67,5 +67,11 @@
     <None Include="Shaders\obstacle.vs">
       <Filter>Resource Files</Filter>
     </None>
+    <None Include="Shaders\sky.fs">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Shaders\sky.vs">
+      <Filter>Resource Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

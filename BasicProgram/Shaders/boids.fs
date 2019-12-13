@@ -12,10 +12,10 @@ void main() {
 	float ams = 0.2;
 	float sps = 0.6;
 
-	vec4 base = vec4(1.0, 1.0, 1.0, 1.0);
+	vec4 base = vec4(0.95, 0.71, 0.24, 1.0);
 	vec4 lightColor = vec4(1.0, 1.0, 1.0, 1.0);
 
-	vec3 lightpos = Eye;
+	vec3 lightpos = vec3(10.0,0.0,10.0);
 
 	vec4 amb = ams*lightColor;
 

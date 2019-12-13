@@ -38,6 +38,8 @@
     <None Include="Shaders\frag.fs" />
     <None Include="Shaders\obstacle.fs" />
     <None Include="Shaders\obstacle.vs" />
+    <None Include="Shaders\sky.fs" />
+    <None Include="Shaders\sky.vs" />
     <None Include="Shaders\vert.vs" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

@@ -52,6 +52,16 @@ Mesh vox("VOX");
 GLuint cirprogram;
 Mesh circle("cir");
 
+//Skybox
+GLuint cubeProgram;
+GLuint cube_VAO;
+GLuint cube_triangles;
+GLuint cube_ibuffer;
+Texture* texture;
+Cube* textureCube;
+GLuint tBuffer;
+const char* cubmapUrl = "Cubemap\\galaxy";
+
 
 int width = 512, height = 512;	//	Window Size 
 
@@ -77,8 +87,7 @@ int eyeLoc;
 
 bool animate = true;			// [Space] key for start or pause the animation
 
-//pre-defines
-
+//	callback defines
 static void error_callback(int error, const char* description);
 static void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos);
@@ -86,7 +95,7 @@ static void mouse_button_callback(GLFWwindow* window, int button, int action, in
 static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
 static void framebufferSizeCallback(GLFWwindow* window, int w, int h);
 
-
+// Random functions
 float sizedRandom(float size) {
 	float a = size * rand() / (RAND_MAX);
 	return  a*1.0f;
@@ -106,33 +115,18 @@ float is0or1() {
 	return a == 0 ? 0 : 1.0f;
 }
 
-float bezier_curve(float a, float x) {
-	float a1 = 1;
-	float a2 = .2;
-	float a3 = 0.04;
-	float a4 = 0;
-
-	float y =   pow(1 - x, 3) * a1 +
-				3 * pow(1 - x, 2) * x * a2 +
-				3 * (1 - x) * pow(x, 2) * a3 +
-				pow(x, 3) * a4;
-	return a * y;
-}
-
 //Euclidean distance
 float distof(float a, float b) {
 	return sqrt(a*a + b*b);
 }
 
-float scaterf(float a, float x) {
-	a = abs(a);
-	return a * pow(exp(1), -1/exp(a / (BOIDS_S) * x));
-	//return bezier_curve(a,x);
+float scatterf(float a, float x) {
+	//a = abs(a);
+	return a * exp(-exp(-a / (BOIDS_S) * x));
 }
 float convergef(float a,float x) {
-	a = abs(a);
-	return  a * pow(exp(1), -exp(a / (BOIDS_S) * x));
-	//return -bezier_curve(a, x);
+	//a = abs(a);
+	return  a * exp(-exp(a / (BOIDS_S) * x));
 }
 
 // Boids Properties
@@ -160,10 +154,10 @@ void initBoidsPos() {
 
 		double dx = centerSize*2 + boidCenter.x + sizedRandom(flockSize) * randomNeg();
 		double dz = boidCenter.z + sizedRandom(flockSize) * randomNeg();
-		double dy = -dz;
+		double dy = 0;
 
 		glm::vec3 pos(dx, dy, dz);
-		float offset = sizedRandom(M_2_PI); 
+		float offset = sizedRandom(M_PI/2); 
 
 		if (numBoids < 10) {
 			printf("%f %f %f\n", pos.x, pos.y, pos.z);
@@ -177,6 +171,84 @@ void initBoidsPos() {
 	}
 
 }
+
+void createSky() {
+	GLuint vbuffer;
+	GLint vPosition;
+	GLint vNormal;
+
+	glGenVertexArrays(1, &cube_VAO);
+	glBindVertexArray(cube_VAO);
+
+	GLfloat vertices[8][4] = {
+			{ -1.0, -1.0, -1.0, 1.0 },		//0
+			{ -1.0, -1.0, 1.0, 1.0 },		//1
+			{ -1.0, 1.0, -1.0, 1.0 },		//2
+			{ -1.0, 1.0, 1.0, 1.0 },		//3
+			{ 1.0, -1.0, -1.0, 1.0 },		//4
+			{ 1.0, -1.0, 1.0, 1.0 },		//5
+			{ 1.0, 1.0, -1.0, 1.0 },		//6
+			{ 1.0, 1.0, 1.0, 1.0 }			//7
+	};
+
+	GLfloat normals[8][3] = {
+			{ -1.0, -1.0, -1.0 },			//0
+			{ -1.0, -1.0, 1.0 },			//1
+			{ -1.0, 1.0, -1.0 },			//2
+			{ -1.0, 1.0, 1.0 },				//3
+			{ 1.0, -1.0, -1.0 },			//4
+			{ 1.0, -1.0, 1.0 },				//5
+			{ 1.0, 1.0, -1.0 },				//6
+			{ 1.0, 1.0, 1.0 }				//7
+	};
+
+	GLuint indexes[36] = { 0, 1, 3, 0, 2, 3,
+		0, 4, 5, 0, 1, 5,
+		2, 6, 7, 2, 3, 7,
+		0, 4, 6, 0, 2, 6,
+		1, 5, 7, 1, 3, 7,
+		4, 5, 7, 4, 6, 7 };
+
+	cube_triangles = 12;
+
+	glGenBuffers(1, &vbuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, vbuffer);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices) + sizeof(normals), NULL, GL_STATIC_DRAW);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
+	glBufferSubData(GL_ARRAY_BUFFER, sizeof(vertices), sizeof(normals), normals);
+
+	glGenBuffers(1, &cube_ibuffer);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cube_ibuffer);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indexes), indexes, GL_STATIC_DRAW);
+
+	glUseProgram(cubeProgram);
+	vPosition = glGetAttribLocation(cubeProgram, "vPosition");
+	glVertexAttribPointer(vPosition, 4, GL_FLOAT, GL_FALSE, 0, 0);
+	glEnableVertexAttribArray(vPosition);
+	vNormal = glGetAttribLocation(cubeProgram, "vNormal");
+	glVertexAttribPointer(vNormal, 3, GL_FLOAT, GL_FALSE, 0, (void*) sizeof(vertices));
+	glEnableVertexAttribArray(vNormal);
+}
+
+void createCubemap(const char* url, GLuint& Buffer) {
+	/*
+		load texture
+	*/
+	textureCube = loadCube(url);
+	glGenTextures(1, &Buffer);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, Buffer);
+	for (int i = 0; i < 6; i++) {
+		glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA, textureCube->width, textureCube->height,
+			0, GL_RGB, GL_UNSIGNED_BYTE, textureCube->data[i]);
+	}
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+}
+
 
 void init(const char* file, Mesh& model, GLuint& p) {
 	GLuint vbuffer;
@@ -243,7 +315,7 @@ void init(const char* file, Mesh& model, GLuint& p) {
 			zmin = model.vertices[i + 2];
 	}
 
-	model.size = glm::vec3(xmax - xmin, ymax - ymin, zmax - zmin);
+	model.size = glm::abs(glm::vec3((xmax - xmin)/xmax, (ymax - ymin)/ymax, (zmax - zmin)/zmax));
 
 
 	/*  Retrieve the vertex normals */
@@ -331,11 +403,18 @@ void start() {
 	obsprogram = buildProgram(vs, fs, 0);
 	dumpProgram(obsprogram, (char*)"obs program");
 
+	vs = buildShader(GL_VERTEX_SHADER, (char*)"Shaders/sky.vs");
+	fs = buildShader(GL_FRAGMENT_SHADER, (char*)"Shaders/sky.fs");
+	cubeProgram = buildProgram(vs, fs, 0);
+	dumpProgram(program, (char*)"Sky program");
+
 	init("Meshes/drone.obj", boids, boidprogram);
 	//init("Meshes/boids.obj", boids, boidprogram);
 	init("Meshes/sphere.obj", sphere, program);
 	init("Meshes/circle.obj", circle, cirprogram);
 	init("Meshes/voxelBall.obj", vox, obsprogram);
+	createSky();
+	createCubemap(cubmapUrl,tBuffer);
 
 	//create init position
 	initBoidsPos();
@@ -369,7 +448,7 @@ void update() {
 
 		for (int i = 0; i < listBoid.size(); i++) {
 			float angle = rot + rotationOffset[i];							//	Current Boid Angle
-			float angleDiff = (angle - obsAngle) / (2 * M_PI);				//	angle distance between Boids & Obstacle
+			float angleDiff = abs((angle - obsAngle) / (2 * M_PI));				//	angle distance between Boids & Obstacle
 			float px = (listBoid[i].x + shifts[i].x);						//	X position of boid
 			float pz = (listBoid[i].z + shifts[i].z);						//	Z position of boid
 			float distx = px * cos(angle) - obstaclePos.x * cos(obsAngle);	//	linear-X distace between Boids & Obstacle
@@ -383,47 +462,57 @@ void update() {
 				diference on the multiplier.
 			*/
 			if (distx > distz) {
-				weightz *= 1 - 1/abs(distx - distz);
-				weightx *= 1 + 1/abs(distx - distz);
+				weightx = 1.5 * distx / abs(distx);
+				weightz = 0.5 * distz / abs(distz);
 			}else {
-				weightx *= 1 - 1/abs(distx - distz);
-				weightz *= 1 + 1/abs(distx - distz);
+				weightx = 0.5 * distx / abs(distx);
+				weightz = 1.5 * distz / abs(distz);
 			}
 
 			//	Before
-			if ( angleDiff < 1 ) {
+			if ( angleDiff > 1 ) {
 				if (angleDiff > therhold) {
 					if (distx >= 0) {
-						shifts[i].x = scaterf(distx, angleDiff) * weightx;
+						shifts[i].x = scatterf(distx, angleDiff) * weightx;
 					}else {
-						shifts[i].x = convergef(distx, angleDiff) * weightx;
+						shifts[i].x = scatterf(-distx, angleDiff) * weightx;
 					}
 
 					if (distz >= 0) {
-						shifts[i].z = scaterf(distz, angleDiff) * weightz;
+						shifts[i].z = scatterf(distz, angleDiff) * weightz;
 					}else {
-						shifts[i].z = convergef(distz, angleDiff) * weightz;
+						shifts[i].z = scatterf(-distz, angleDiff) * weightz;
 					}
 				}
 			}
 			
 			//	After
-			else if(angleDiff > 1){
+			else{
 				if (angleDiff < 1+therhold) {
 					if (distx >= 0) {
 						shifts[i].x = convergef(distx, angleDiff) * weightx;
 					}else {
-						shifts[i].x = scaterf(distx, angleDiff) * weightx;
+						shifts[i].x = convergef(-distx, angleDiff) * weightx;
 					}
 
 					if (distz >= 0) {
 						shifts[i].z = convergef(distz, angleDiff) * weightz;
 					}else {
-						shifts[i].z = scaterf(distz, angleDiff) * weightz;
+						shifts[i].z = convergef(-distz, angleDiff) * weightz;
 					}
 				}
+				// none of both
+				
 			}
+
 			#ifdef DEBUG
+				glm::vec3  p1 = (shifts[0]);
+				glm::vec3  p2 = (shifts[1]);
+				glm::vec3 dist = glm::abs(p1 - p2);
+				if(abs((p1 / p2).x) < 2)
+					if(abs((p1 / p2).x) < 0.2)
+						printf("%f %f P: %f\n",dist.x,dist.z,(p1/p2).x);
+
 				if (i == 0) {
 				
 					if (angleDiff > therhold) {
@@ -439,20 +528,15 @@ void update() {
 			#endif	
 			//	Self awareness
 			for (int j = 0; j < listBoid.size(); j++) {
-				glm::vec3  p1 = (listBoid[i]+shifts[i])* cos(angle);
-				glm::vec3  p2 = (listBoid[j]+shifts[j])* cos(angle);
+				glm::vec3  p1 = (listBoid[i]+shifts[i]);
+				glm::vec3  p2 = (listBoid[j]+shifts[j]);
 				glm::vec3 dist = glm::abs( p1 - p2);
 				
 				//x
-				if (dist.x < boids.size.x) {
-					shifts[i].x += 0.000001;
-				}
-
-				//z
-				if (dist.z < boids.size.z) {
-					shifts[i].z += 0.000001;
-				}
-
+				if (abs((p1 / p2).x) < 2 && abs((p1 / p2).x) > 0)
+					if (abs((p1 / p2).x) < 0.2)
+						//p1 = p1;
+						shifts[i].x -= abs((p1 / p2).x) * dist.x /abs(dist.x);
 			}
 		}
 	}
@@ -482,7 +566,33 @@ void update() {
 void display(void) {
 	
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	
+
+	glm::mat4 skySize = glm::scale(glm::mat4(1.0f),glm::vec3(10.0f));
+
+
+	glUseProgram(cubeProgram);
+	viewLoc = glGetUniformLocation(cubeProgram, "modelView");
+	glUniformMatrix4fv(viewLoc, 1, 0, glm::value_ptr(view*skySize));
+	projLoc = glGetUniformLocation(cubeProgram, "projection");
+	glUniformMatrix4fv(projLoc, 1, 0, glm::value_ptr(projection));
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, tBuffer);
+	GLuint skyboxTextureId = glGetUniformLocation(cubeProgram, "tex");
+	glUniform1i(skyboxTextureId, 0);
+
+	glDepthMask(GL_FALSE);
+	glDisable(GL_DEPTH_TEST);
+	glFrontFace(GL_CCW);
+	glDisable(GL_CULL_FACE);
+
+	glBindVertexArray(cube_VAO);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cube_ibuffer);
+	glDrawElements(GL_TRIANGLES, 3 * cube_triangles, GL_UNSIGNED_INT, NULL);
+	glDepthMask(GL_TRUE);
+	glEnable(GL_DEPTH_TEST);
+
+
 	// Center
 	glUseProgram(program);
 
